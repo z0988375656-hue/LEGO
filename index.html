@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>樂高組裝挑戰</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Inter 字體 -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        /* 特別為樂高主題加入更具遊戲感的顏色和樣式 */
+        :root {
+            --lego-yellow: #FFCB05;
+            --lego-red: #D71A21;
+            --lego-blue: #0055BF;
+            --lego-green: #00774D;
+        }
+        body { font-family: 'Inter', sans-serif; }
+
+        .lego-bg {
+            background-color: #f7f7f7;
+            background-image: repeating-linear-gradient(45deg, #e9e9e9 0, #e9e9e9 1px, #f7f7f7 0, #f7f7f7 50%);
+            background-size: 8px 8px;
+        }
+        .lego-title {
+            color: var(--lego-red);
+            text-shadow: 2px 2px 0 var(--lego-yellow);
+        }
+        .step-button {
+            transition: all 0.15s ease-in-out;
+            background-color: var(--lego-blue);
+            box-shadow: 0 4px 0 var(--lego-red);
+        }
+        .step-button:hover {
+            background-color: #0066d9;
+            box-shadow: 0 6px 0 var(--lego-red);
+            transform: translateY(-2px);
+        }
+        .step-button:active {
+            box-shadow: 0 2px 0 var(--lego-red);
+            transform: translateY(2px);
+        }
+    </style>
+</head>
+<body class="lego-bg min-h-screen flex flex-col items-center p-4">
+
+    <!-- 遊戲容器 -->
+    <div id="game-container" class="w-full max-w-2xl bg-white shadow-2xl rounded-xl p-6 md:p-10 mt-6 border-4 border-gray-300">
+        <h1 class="text-4xl font-extrabold lego-title mb-4 text-center">
+            🧱 樂高組裝挑戰 🚀
+        </h1>
+        <p class="text-sm text-gray-500 mb-6 text-center">按照正確的組裝順序，獲得樂高金幣！</p>
+
+        <!-- 遊戲資訊面板 -->
+        <div class="flex justify-between items-center mb-6 p-4 bg-gray-100 rounded-xl shadow-inner border-t-2 border-gray-300">
+            <div class="text-lg font-semibold text-gray-700">
+                <span id="current-question-display">第 1 題</span> / 5 題
+            </div>
+            <div class="text-2xl font-bold text-yellow-600 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 mr-2 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10 2a8 8 0 00-7.07 11.45L10 20l7.07-6.55A8 8 0 0010 2zm0 14a6 6 0 110-12 6 6 0 010 12zm0-9a1 1 0 00-1 1v4a1 1 0 102 0v-4a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                金幣：<span id="coin-display">0</span>
+            </div>
+        </div>
+
+        <!-- 遊戲主體區域 -->
+        <div id="game-area">
+            <div class="text-center mb-6">
+                <p class="text-xl text-gray-700 font-medium">請按照正確順序組裝：</p>
+                <p id="target-number-display" class="text-5xl font-black mb-4 text-green-600"></p>
+                <p id="target-word-hint" class="text-lg font-bold text-gray-600 bg-gray-100 py-1 px-3 rounded-full inline-block shadow-md"></p>
+            </div>
+
+            <!-- 答案放置區 (Answer Slots - 步驟順序) -->
+            <div class="mb-8">
+                <h3 class="text-lg font-bold text-gray-800 mb-2 text-center">組裝順序 (點擊步驟按鈕填入):</h3>
+                <div id="answer-slots-container" class="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-400 min-h-[10rem]">
+                    <!-- 動態生成答案槽 -->
+                    <p class="text-center text-gray-500 italic">點擊下方步驟按鈕開始組裝...</p>
+                </div>
+            </div>
+
+            <!-- 步驟提示區 (Scrambled Steps) - 這是選項的位置 -->
+            <div class="mt-8">
+                <h3 class="text-lg font-bold text-gray-800 mb-2 text-center">可選步驟 (點擊以選擇):</h3>
+                <!-- 使用 grid 讓選項在手機上分兩列顯示，更容易點擊 -->
+                <div id="letter-hints-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-yellow-100 rounded-lg shadow-lg border-2 border-yellow-400 min-h-[5rem]">
+                    <!-- 動態生成步驟按鈕 -->
+                    <p class="col-span-full text-center text-gray-600 font-semibold" id="loading-message">步驟載入中...</p>
+                </div>
+            </div>
+
+            <!-- 動作按鈕 -->
+            <div class="flex justify-center space-x-4 mt-8">
+                <button id="undo-button" class="px-6 py-3 text-lg font-bold rounded-full bg-red-500 text-white hover:bg-red-600 transition duration-150 shadow-lg" onclick="undoStep()" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M11 15l-3-3m0 0l3-3m-3 3h8m-12 7V4" />
+                    </svg>
+                    復原上一步
+                </button>
+                <button id="check-button" class="px-8 py-3 text-xl font-bold rounded-full bg-green-500 text-white hover:bg-green-600 transition duration-150 shadow-lg" onclick="checkAnswer()">
+                    檢查組裝
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 排行榜顯示區 (新增) -->
+    <div class="w-full max-w-2xl bg-white shadow-xl rounded-xl p-6 md:p-10 mt-6 border-4 border-gray-300">
+        <h2 class="text-3xl font-extrabold text-blue-600 mb-4 text-center">🏆 樂高高手榜 🏆</h2>
+
+        <!-- 設定 ID 區域 -->
+        <div id="username-setup" class="mb-6 p-4 bg-purple-100 rounded-lg border border-purple-300">
+            <h3 class="text-lg font-bold text-purple-700 mb-2">設定您的玩家 ID：</h3>
+            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                <input type="text" id="username-input" maxlength="16" placeholder="輸入您喜歡的 ID (最多 16 字)" class="flex-grow p-2 rounded-lg border border-gray-300 focus:ring-purple-500 focus:border-purple-500">
+                <button id="save-username-button" class="px-4 py-2 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition duration-150" onclick="saveDisplayName()">
+                    儲存 ID
+                </button>
+            </div>
+            <p id="username-message" class="text-sm mt-2 text-purple-600"></p>
+        </div>
+        <!-- 結束新增：設定 ID 區域 -->
+
+        <div id="leaderboard-list" class="space-y-2">
+            <p class="text-center text-gray-500 italic">正在載入排行榜...</p>
+        </div>
+        <div id="user-id-display" class="mt-4 text-xs text-gray-400 text-center"></div>
+    </div>
+    <!-- 結束新增 -->
+
+    <!-- 結果/訊息提示區 (Custom Modal) -->
+    <div id="result-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50" onclick="closeModal()">
+        <div class="bg-white rounded-xl p-8 max-w-sm w-full text-center shadow-2xl transform transition-all duration-300 scale-100" onclick="event.stopPropagation()">
+            <div id="modal-icon" class="text-5xl mb-4"></div>
+            <h3 id="modal-title" class="text-2xl font-bold mb-3"></h3>
+            <p id="modal-message" class="text-lg text-gray-600 mb-6"></p>
+            <button id="modal-button" class="px-6 py-2 font-semibold rounded-full bg-blue-600 text-white hover:bg-blue-700 transition duration-150" onclick="nextQuestion()">
+                繼續下一題
+            </button>
+        </div>
+    </div>
+
+    <!-- 遊戲結束畫面 (Final Score Modal) -->
+    <div id="finish-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl p-10 max-w-md w-full text-center shadow-2xl transform transition-all duration-300 scale-100">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-yellow-500 mx-auto mb-4 animate-bounce" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 2a8 8 0 00-7.23 4.542.5.5 0 00.5.86c.395-.145.82-.224 1.27-.224h.005c2.617 0 4.35 1.954 4.35 4.977v.003c0 1.05.15 2.067.436 2.977h-3.47c-.552 0-1 .448-1 1s.448 1 1 1h8c.552 0 1-.448 1-1s-.448-1-1-1h-3.472c.287-.91.438-1.927.438-2.977v-.003c0-3.023 1.733-4.977 4.35-4.977h.004c.45 0 .875.08 1.27.225a.5.5 0 00.5-.86A8 8 0 0010 2z" />
+            </svg>
+            <h3 class="text-3xl font-extrabold text-green-600 mb-4">恭喜！所有挑戰完成！</h3>
+            <p class="text-xl text-gray-700 mb-6">您總共獲得了：</p>
+            <p id="final-coin-display" class="text-6xl font-black text-red-600 mb-8">0 金幣</p>
+            <button class="px-8 py-3 font-semibold rounded-full bg-pink-500 text-white hover:bg-pink-600 transition duration-150 shadow-lg" onclick="location.reload()">
+                再玩一次
+            </button>
+        </div>
+    </div>
+
+<script type="module">
+    // 載入 Firebase 模組
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, query, collection, onSnapshot, limit, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- Firebase 相關全域變數 ---
+    let app, db, auth;
+    let userId = '';
+    let displayName = ''; // 儲存使用者設定的 ID
+    let isAuthReady = false;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    // ----------------------------
+
+    // 定義樂高組裝挑戰的步驟
+    const LEGO_CHALLENGES = [
+        { 
+            target: "簡單方塊 (Cube)",
+            hint: "組裝一個穩固的四方形積木",
+            // 儲存步驟的簡短代碼 (用於檢查)
+            steps: ["S1", "S2"], 
+            // 顯示給使用者的步驟名稱
+            stepLabels: ["底層放置 2x4 紅色積木", "上方疊放 2x4 紅色積木"]
+        },
+        { 
+            target: "迷你賽車 (Mini Car)",
+            hint: "組裝一台簡易的輪式賽車",
+            steps: ["S1", "S2", "S3"], 
+            stepLabels: ["安裝輪胎", "放置底盤平台", "安裝方向盤"]
+        },
+        { 
+            target: "樂高花朵 (Flower)",
+            hint: "組裝一朵帶有花瓣的積木花",
+            steps: ["S1", "S2", "S3"], 
+            stepLabels: ["放置綠色花莖", "連接黃色花蕊", "安裝紅色花瓣"]
+        },
+        { 
+            target: "小型瞭望塔 (Tower)",
+            hint: "組裝一座頂部帶有屋頂的塔",
+            steps: ["S1", "S2", "S3"], 
+            stepLabels: ["放置 8x8 綠色底板", "堆疊 4x4 藍色方塊", "安裝圓錐形屋頂"]
+        },
+        { 
+            target: "機器人頭部 (Robot Head)",
+            hint: "組裝一個帶有天線的頭部",
+            steps: ["S1", "S2", "S3"], 
+            stepLabels: ["組裝主要頭部方塊", "連接天線", "安裝藍色眼睛瓷磚"]
+        },
+    ];
+
+    // 遊戲狀態
+    let gameState = {
+        currentQuestionIndex: 0,
+        coins: 0,
+        userAnswerSteps: [], // 使用者已選的步驟代碼 (例如: ["S1", "S3"])
+        availableSteps: [],    // 提示區剩餘的步驟 ({code: "S1", label: "..."})
+        currentQuestionData: null,
+    };
+
+    // DOM 元素參考 (在 DOMContentLoaded 後初始化)
+    var D = {}; 
+
+    /**
+     * 初始化 DOM 元素參考。
+     */
+    function initializeDomReferences() {
+        D = {
+            questionDisplay: document.getElementById('current-question-display'),
+            coinDisplay: document.getElementById('coin-display'),
+            targetNumberDisplay: document.getElementById('target-number-display'),
+            targetWordHint: document.getElementById('target-word-hint'),
+            answerSlotsContainer: document.getElementById('answer-slots-container'),
+            letterHintsContainer: document.getElementById('letter-hints-container'),
+            undoButton: document.getElementById('undo-button'),
+            checkButton: document.getElementById('check-button'),
+            resultModal: document.getElementById('result-modal'),
+            finishModal: document.getElementById('finish-modal'),
+            modalTitle: document.getElementById('modal-title'),
+            modalMessage: document.getElementById('modal-message'),
+            modalIcon: document.getElementById('modal-icon'),
+            modalButton: document.getElementById('modal-button'),
+            finalCoinDisplay: document.getElementById('final-coin-display'),
+            loadingMessage: document.getElementById('loading-message'),
+            // 排行榜元素
+            leaderboardList: document.getElementById('leaderboard-list'),
+            userIdDisplay: document.getElementById('user-id-display'),
+            // 新增的 ID 設定元素
+            usernameInput: document.getElementById('username-input'),
+            saveUsernameButton: document.getElementById('save-username-button'),
+            usernameMessage: document.getElementById('username-message'),
+        };
+        // 檢查關鍵元素是否載入成功
+        if (!D.letterHintsContainer) {
+            console.error("Critical DOM elements not found. Cannot start game.");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 輔助函數：Fisher-Yates 洗牌算法
+     */
+    function shuffleArray(array) {
+        let currentIndex = array.length, randomIndex;
+        while (currentIndex !== 0) {
+            randomIndex = Math.floor(Math.random() * currentIndex);
+            currentIndex--;
+            [array[currentIndex], array[randomIndex]] = [
+                array[randomIndex], array[currentIndex]
+            ];
+        }
+        return array;
+    }
+
+    /**
+     * 啟動新一輪的問答。
+     */
+    function loadQuestion() {
+        const index = gameState.currentQuestionIndex;
+        if (index >= LEGO_CHALLENGES.length) {
+            showFinishModal();
+            return;
+        }
+
+        gameState.currentQuestionData = LEGO_CHALLENGES[index];
+        // 初始化答案槽為 null
+        gameState.userAnswerSteps = Array(gameState.currentQuestionData.steps.length).fill(null);
+
+        // 準備提示步驟，包含代碼和標籤
+        gameState.availableSteps = gameState.currentQuestionData.steps.map((code, i) => ({ 
+            code: code, 
+            label: gameState.currentQuestionData.stepLabels[i],
+            originalIndex: i // 用於識別步驟
+        }));
+        shuffleArray(gameState.availableSteps);
+
+        // 更新介面
+        D.questionDisplay.textContent = `第 ${index + 1} 題`;
+        D.targetNumberDisplay.textContent = gameState.currentQuestionData.target;
+        D.targetWordHint.textContent = `提示：${gameState.currentQuestionData.hint}`;
+
+        renderAnswerSlots();
+        renderStepHints();
+        updateButtonState();
+    }
+
+    /**
+     * 渲染答案放置區 (空槽)。
+     */
+    function renderAnswerSlots() {
+        D.answerSlotsContainer.innerHTML = '';
+        if (gameState.userAnswerSteps.length === 0) {
+             D.answerSlotsContainer.innerHTML = '<p class="text-center text-gray-500 italic">點擊下方步驟按鈕開始組裝...</p>';
+        } else {
+            gameState.userAnswerSteps.forEach((step, index) => {
+                const slot = document.createElement('button');
+                slot.className = `w-full p-3 font-semibold text-lg text-left rounded-lg transition duration-100 flex items-center shadow-md ${
+                    step !== null 
+                        ? 'bg-blue-200 text-blue-800 hover:bg-blue-300'
+                        : 'bg-gray-100 border-2 border-dashed border-gray-400 text-gray-500'
+                }`;
+                slot.innerHTML = step !== null 
+                    ? `<span class="font-bold mr-3 text-xl text-blue-600">${index + 1}.</span> ${step.label}`
+                    : `<span class="font-bold mr-3 text-xl text-gray-500">${index + 1}.</span> 點擊步驟按鈕`;
+                
+                // 點擊答案槽復原該步驟
+                if (step !== null) {
+                    slot.onclick = () => undoStep(index); 
+                }
+                D.answerSlotsContainer.appendChild(slot);
+            });
+        }
+    }
+
+    /**
+     * 渲染步驟提示按鈕。
+     */
+    function renderStepHints() {
+        D.letterHintsContainer.innerHTML = '';
+        let buttonCount = 0;
+        gameState.availableSteps.forEach((item, index) => {
+            // 只有當 item 不是 'null' 時才渲染
+            if (item && item.code) {
+                buttonCount++;
+                const button = document.createElement('button');
+                button.className = 'step-button text-sm md:text-base font-bold text-white px-4 py-3 rounded-xl transform active:bg-blue-700 w-full whitespace-nowrap overflow-hidden text-ellipsis';
+                button.textContent = item.label;
+                // 使用 dataset 儲存提示步驟在 availableSteps 中的索引
+                button.dataset.index = index;
+                button.onclick = () => selectStep(index);
+                D.letterHintsContainer.appendChild(button);
+            }
+        });
+
+        // 如果沒有按鈕，顯示載入/空訊息
+        if (buttonCount === 0) {
+            D.letterHintsContainer.innerHTML = '<p class="col-span-full text-center text-gray-600 font-semibold">所有步驟已選取，請檢查組裝！</p>';
+        }
+    }
+
+    /**
+     * 從提示區選擇一個步驟放入答案槽。
+     * @param {number} hintIndex 提示步驟在 availableSteps 陣列中的索引
+     */
+    function selectStep(hintIndex) {
+        // 找到第一個空的答案槽
+        const emptySlotIndex = gameState.userAnswerSteps.findIndex(s => s === null);
+
+        if (emptySlotIndex !== -1) {
+            const selectedItem = gameState.availableSteps[hintIndex];
+
+            // 1. 將步驟放入答案槽 (儲存整個物件)
+            gameState.userAnswerSteps[emptySlotIndex] = selectedItem;
+
+            // 2. 從 availableSteps 中移除（使用 null 標記）
+            gameState.availableSteps[hintIndex] = null; 
+
+            renderAnswerSlots();
+            renderStepHints();
+            updateButtonState();
+        }
+    }
+
+    /**
+     * 復原上一個操作 (或點擊答案槽復原指定步驟)。
+     * @param {number} [slotIndex] 如果提供，則復原該答案槽中的步驟。
+     */
+    function undoStep(slotIndex = -1) {
+        let indexToUndo = slotIndex;
+
+        if (indexToUndo === -1) {
+            // 如果沒有指定 slotIndex，則復原最後一個已填入的步驟
+            for (let i = gameState.userAnswerSteps.length - 1; i >= 0; i--) {
+                if (gameState.userAnswerSteps[i] !== null) {
+                    indexToUndo = i;
+                    break;
+                }
+            }
+        }
+
+        if (indexToUndo !== -1 && gameState.userAnswerSteps[indexToUndo] !== null) {
+            const stepToMoveBack = gameState.userAnswerSteps[indexToUndo];
+
+            // 1. 找到 availableSteps 中第一個為 null 的位置 (即被使用掉的提示位置)
+            // 由於我們只用 null 來標記被移除的步驟，這裡找第一個 null
+            const availableIndex = gameState.availableSteps.findIndex(item => item === null);
+
+            if (availableIndex !== -1) {
+                // 2. 將步驟放回 availableSteps 的空位
+                gameState.availableSteps[availableIndex] = stepToMoveBack;
+
+                // 3. 清空答案槽
+                gameState.userAnswerSteps[indexToUndo] = null;
+            } else {
+                 // 其實不應該發生，除非步驟數量與答案槽數量不匹配，但安全起見，如果沒有 null 槽位，就直接 push
+                 gameState.availableSteps.push(stepToMoveBack);
+                 gameState.userAnswerSteps[indexToUndo] = null;
+            }
+
+
+            renderAnswerSlots();
+            renderStepHints();
+            updateButtonState();
+        }
+    }
+
+
+    /**
+     * 更新按鈕的啟用/禁用狀態。
+     */
+    function updateButtonState() {
+        if (!D.checkButton) return; // 避免未初始化錯誤
+
+        const isFull = gameState.userAnswerSteps.every(s => s !== null);
+        D.checkButton.disabled = !isFull;
+        
+        // 根據是否填滿來切換按鈕顏色
+        if (isFull) {
+            D.checkButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+            D.checkButton.classList.add('bg-green-500', 'hover:bg-green-600');
+        } else {
+            D.checkButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+            D.checkButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
+        }
+
+
+        const isEmpty = gameState.userAnswerSteps.every(s => s === null);
+        D.undoButton.disabled = isEmpty;
+
+        // 根據是否為空來切換復原按鈕顏色
+        if (isEmpty) {
+            D.undoButton.classList.remove('bg-red-500', 'hover:bg-red-600');
+            D.undoButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
+        } else {
+            D.undoButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+            D.undoButton.classList.add('bg-red-500', 'hover:bg-red-600');
+        }
+    }
+
+    /**
+     * 檢查使用者的答案是否正確。
+     */
+    function checkAnswer() {
+        // 禁用檢查按鈕防止多次點擊
+        D.checkButton.disabled = true;
+
+        // 提取使用者組裝步驟的代碼
+        const userAnswerCodes = gameState.userAnswerSteps.map(step => step.code);
+        const correctAnswerCodes = gameState.currentQuestionData.steps;
+
+        let title, message, iconHtml, newCoins = 0;
+
+        // 檢查順序是否完全匹配
+        const isCorrect = userAnswerCodes.every((code, index) => code === correctAnswerCodes[index]);
+
+        if (isCorrect) {
+            newCoins = 100;
+            gameState.coins += newCoins;
+            gameState.currentQuestionIndex++; // 答對才真正進入下一題
+
+            title = "✓ 恭喜！組裝成功！";
+            message = `您完全按照說明書完成了 ${gameState.currentQuestionData.target} 的組裝，獲得 ${newCoins} 枚金幣！`;
+            iconHtml = '<span class="text-green-500">🏆</span>';
+        } else {
+            // *** 關鍵變動在這裡：答錯直接進入下一題，不重置索引或給予機會 ***
+            newCoins = 0;
+            gameState.currentQuestionIndex++; 
+            
+            title = "✗ 組裝順序錯誤！";
+            message = `很可惜！正確的組裝步驟應該是：<br>1. ${gameState.currentQuestionData.stepLabels.join('<br>2. ')}。<br><br>請點擊「繼續下一題」前往下一個挑戰。`;
+            iconHtml = '<span class="text-red-500">🧱</span>';
+            // 答錯後不加金幣
+        }
+
+        // 更新介面金幣顯示
+        D.coinDisplay.textContent = gameState.coins;
+
+        // 顯示結果 Modal
+        D.modalTitle.textContent = title;
+        D.modalMessage.innerHTML = message; // 使用 innerHTML 允許換行
+        D.modalIcon.innerHTML = iconHtml;
+        D.resultModal.classList.remove('hidden');
+    }
+
+    /**
+     * 關閉結果 Modal。
+     */
+    function closeModal() {
+        D.resultModal.classList.add('hidden');
+    }
+
+    /**
+     * 進入下一題或結束遊戲。
+     */
+    function nextQuestion() {
+        closeModal();
+        loadQuestion();
+    }
+
+    /**
+     * 從私有資料中讀取使用者的自訂 ID。
+     * @returns {string} 顯示名稱。
+     */
+    async function loadDisplayName() {
+        if (!isAuthReady || !db || !userId) return `LegoMaster_${userId.substring(0, 4)}`;
+
+        const profileDocRef = doc(db, `artifacts/${appId}/users/${userId}/profile/metadata`);
+        try {
+            const docSnap = await getDoc(profileDocRef);
+            if (docSnap.exists() && docSnap.data().displayName) {
+                displayName = docSnap.data().displayName;
+            } else {
+                displayName = `LegoMaster_${userId.substring(0, 4)}`;
+            }
+            return displayName;
+        } catch (e) {
+            console.error("Error loading display name:", e);
+            return `LegoMaster_${userId.substring(0, 4)}`;
+        }
+    }
+
+    /**
+     * 將使用者輸入的 ID 儲存到私有資料中。
+     */
+    window.saveDisplayName = async function() {
+        const inputName = D.usernameInput.value.trim();
+        D.usernameMessage.textContent = '儲存中...';
+        D.usernameMessage.classList.remove('text-red-500');
+        
+        if (!inputName) {
+            D.usernameMessage.textContent = 'ID 不能為空！';
+            D.usernameMessage.classList.add('text-red-500');
+            return;
+        }
+        if (!isAuthReady || !db || !userId) {
+            D.usernameMessage.textContent = '認證尚未完成，請稍候再試。';
+            D.usernameMessage.classList.add('text-red-500');
+            return;
+        }
+
+        const profileDocRef = doc(db, `artifacts/${appId}/users/${userId}/profile/metadata`);
+        try {
+            await setDoc(profileDocRef, { displayName: inputName }, { merge: true });
+            displayName = inputName; // 更新全域變數
+            D.usernameInput.value = displayName; // 確保輸入框顯示最新的
+            D.usernameMessage.textContent = `玩家 ID 成功儲存為：${displayName}`;
+        } catch (e) {
+            console.error("Error saving display name:", e);
+            D.usernameMessage.textContent = '儲存 ID 失敗，請檢查連線。';
+            D.usernameMessage.classList.add('text-red-500');
+        }
+    }
+
+
+    /**
+     * 將最終得分儲存到 Firestore 排行榜。
+     */
+    async function saveScoreToLeaderboard(finalScore) {
+        if (!isAuthReady || !db || !userId) {
+            console.warn("Authentication not ready or DB not initialized. Score not saved.");
+            return;
+        }
+
+        const leaderboardCollectionPath = `artifacts/${appId}/public/data/leaderboard`;
+        const userDocRef = doc(db, leaderboardCollectionPath, userId); // 使用 userId 作為文檔 ID
+
+        try {
+            // 1. 取得現有分數
+            const docSnap = await getDoc(userDocRef);
+            const currentScore = docSnap.exists() ? docSnap.data().score : 0;
+            
+            // 2. 取得目前的顯示名稱（確保使用的是最新設定的 ID）
+            const currentDisplayName = await loadDisplayName();
+
+            // 3. 只有當新得分高於現有分數時才更新
+            if (finalScore > currentScore) {
+                await setDoc(userDocRef, {
+                    userId: userId,
+                    username: currentDisplayName, // 使用自訂 ID
+                    score: finalScore,
+                    timestamp: Date.now()
+                });
+                console.log("New high score saved:", finalScore);
+            } else {
+                console.log("Current score is not a high score. Not saved.");
+            }
+        } catch (e) {
+            console.error("Error saving score to leaderboard: ", e);
+        }
+    }
+
+
+    /**
+     * 從 Firestore 獲取並實時更新排行榜。
+     */
+    function fetchLeaderboard() {
+        if (!isAuthReady || !db) return;
+
+        const leaderboardCollectionPath = `artifacts/${appId}/public/data/leaderboard`;
+        // 依分數降序排列，限制前 10 名
+        const q = query(
+            collection(db, leaderboardCollectionPath),
+            orderBy("score", "desc"), 
+            limit(10) 
+        );
+
+        // 設置實時監聽
+        onSnapshot(q, (querySnapshot) => {
+            const scores = [];
+            querySnapshot.forEach((doc) => {
+                scores.push(doc.data());
+            });
+            renderLeaderboard(scores);
+        }, (error) => {
+            console.error("Error fetching leaderboard:", error);
+            D.leaderboardList.innerHTML = '<p class="text-center text-red-500 italic">載入排行榜時發生錯誤。</p>';
+        });
+    }
+
+    /**
+     * 渲染排行榜到 UI。
+     * @param {Array} scores - 得分物件的陣列。
+     */
+    function renderLeaderboard(scores) {
+        D.leaderboardList.innerHTML = '';
+        if (scores.length === 0) {
+            D.leaderboardList.innerHTML = '<p class="text-center text-gray-500 italic">目前無分數紀錄，成為第一名吧！</p>';
+            return;
+        }
+
+        scores.forEach((scoreData, index) => {
+            const rank = index + 1;
+            const isCurrentUser = scoreData.userId === userId;
+            // 確保有 username 字段，並在沒有時回退到 ID
+            const displayUsername = scoreData.username || `LegoMaster_${scoreData.userId.substring(0, 4)}`;
+
+            const item = document.createElement('div');
+            item.className = `flex justify-between items-center p-3 rounded-lg font-semibold shadow-sm transition-all duration-300 ${
+                isCurrentUser 
+                    ? 'bg-yellow-200 border-2 border-yellow-500 scale-105' // 突出顯示當前使用者
+                    : 'bg-gray-100 hover:bg-gray-200'
+            }`;
+
+            item.innerHTML = `
+                <span class="text-xl w-8 text-center ${rank <= 3 ? 'text-red-600 font-extrabold' : 'text-gray-600'}">${rank}.</span>
+                <span class="flex-1 truncate text-left ml-4 ${isCurrentUser ? 'text-yellow-700 font-extrabold' : 'text-gray-800'}">${displayUsername} ${isCurrentUser ? '(您)' : ''}</span>
+                <span class="text-xl text-right font-bold text-blue-600">${scoreData.score} 金幣</span>
+            `;
+            D.leaderboardList.appendChild(item);
+        });
+    }
+
+    /**
+     * 顯示遊戲結束畫面 (包含儲存得分)。
+     */
+    function showFinishModal() {
+        document.getElementById('game-area').classList.add('hidden');
+        D.finalCoinDisplay.textContent = gameState.coins;
+        D.finishModal.classList.remove('hidden');
+        
+        // --- Save Score ---
+        saveScoreToLeaderboard(gameState.coins);
+        // -----------------------
+    }
+
+
+    /**
+     * 初始化 Firebase 服務並進行身份驗證。
+     */
+    async function initializeFirebase() {
+        if (!firebaseConfig) {
+            console.error("Firebase config is missing.");
+            D.userIdDisplay.textContent = "無法載入 Firebase 配置。";
+            return;
+        }
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+            // 處理身份驗證
+            if (initialAuthToken) {
+                await signInWithCustomToken(auth, initialAuthToken);
+            } else {
+                await signInAnonymously(auth);
+            }
+            
+            // 監聽認證狀態變化
+            onAuthStateChanged(auth, async (user) => {
+                isAuthReady = true;
+                if (user) {
+                    userId = user.uid;
+                    // 認證完成後，載入使用者的自訂 ID
+                    const currentDisplayName = await loadDisplayName();
+                    D.usernameInput.value = currentDisplayName;
+                    D.usernameMessage.textContent = `目前的玩家 ID：${currentDisplayName}`;
+                    
+                    // 顯示用戶 ID (多人遊戲要求)
+                    if (D.userIdDisplay) {
+                         D.userIdDisplay.textContent = `玩家 ID (用於連線)：${userId}`;
+                    }
+                    // 認證完成後，立即載入排行榜
+                    fetchLeaderboard();
+                } else {
+                    userId = '';
+                    displayName = '';
+                    D.userIdDisplay.textContent = "玩家 ID: 匿名使用者";
+                }
+            });
+
+        } catch (error) {
+            console.error("Firebase initialization or sign-in failed:", error);
+            D.userIdDisplay.textContent = "Firebase 連接錯誤。";
+        }
+    }
+
+
+    // 遊戲開始：確保 DOM 內容載入完畢後才執行腳本
+    document.addEventListener('DOMContentLoaded', () => {
+        if (initializeDomReferences()) {
+            initializeFirebase(); // 先初始化 Firebase 和認證
+            loadQuestion(); // 再載入問題
+        }
+    });
+
+    // 為了讓全域函式能被 HTML 呼叫，將其設定為 window 屬性
+    window.undoStep = undoStep;
+    window.checkAnswer = checkAnswer;
+    window.nextQuestion = nextQuestion;
+    window.closeModal = closeModal;
+    window.saveDisplayName = saveDisplayName;
+</script>
+
+</body>
+</html>
